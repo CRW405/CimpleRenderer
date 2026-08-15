@@ -63,6 +63,4 @@ triangulated meshes.
 - free fly camera
 - mouse panning
 - mouse rotation
-- ASCII shading
-- pixel shading
 - glb support
