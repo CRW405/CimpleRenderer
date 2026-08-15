@@ -1,4 +1,5 @@
 #include <getopt.h>
+#include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -36,6 +37,9 @@ void handle_sigint(int sig) {
 	running = false;
 }
 
+const char symbol_ramp[] = ".,-~:;=!*#$@";
+float *depth_buffer = NULL;
+
 void render_scene(Mesh *scene) {
 	static double distance = 5.0;
 	static double angle_x = 0.0;
@@ -59,6 +63,9 @@ void render_scene(Mesh *scene) {
 	scroll_delta = 0;
 
 	memset(pixel_buffer, ' ', screen_width * screen_height);
+	for (int i = 0; i < screen_width * screen_height; i++) {
+		depth_buffer[i] = INFINITY;
+	}
 
 	for (size_t i = 0; i < scene->face_count; i++) {
 		Face *face = &scene->faces[i];
@@ -66,16 +73,22 @@ void render_scene(Mesh *scene) {
 		if (is_backface(face, angle_x, angle_y) && !no_cull)
 			continue;
 
-		Point2D p1 = project(*face->vertex1, screen_width, screen_height, angle_x, angle_y, distance);
-		Point2D p2 = project(*face->vertex2, screen_width, screen_height, angle_x, angle_y, distance);
-		Point2D p3 = project(*face->vertex3, screen_width, screen_height, angle_x, angle_y, distance);
+		ProjectedVertex p1 = project(*face->vertex1, screen_width, screen_height, angle_x, angle_y, distance);
+		ProjectedVertex p2 = project(*face->vertex2, screen_width, screen_height, angle_x, angle_y, distance);
+		ProjectedVertex p3 = project(*face->vertex3, screen_width, screen_height, angle_x, angle_y, distance);
 
-		draw_line(p1.x, p1.y, p2.x, p2.y, pixel_buffer, screen_width, screen_height, '#');
-		draw_line(p2.x, p2.y, p3.x, p3.y, pixel_buffer, screen_width, screen_height, '#');
-		draw_line(p3.x, p3.y, p1.x, p1.y, pixel_buffer, screen_width, screen_height, '#');
+		int shade_index = get_shade_level(face, angle_x, angle_y, sizeof(symbol_ramp) - 1);
+		char shade_symbol = symbol_ramp[shade_index];
+		double intensity = get_shade_intensity(face, angle_x, angle_y);
+		unsigned char shade_byte = (unsigned char)(intensity * 255.0 + 0.5);
 
 		if (!no_fill)
-			fill_triangle(p1, p2, p3, pixel_buffer, screen_width, screen_height, '#');
+			fill_triangle(p1, p2, p3, pixel_buffer, depth_buffer, shade_buffer, screen_width, screen_height, shade_symbol, shade_byte);
+		else {
+			draw_line(p1.x, p1.y, p2.x, p2.y, pixel_buffer, shade_buffer, screen_width, screen_height, shade_symbol, shade_byte);
+			draw_line(p2.x, p2.y, p3.x, p3.y, pixel_buffer, shade_buffer, screen_width, screen_height, shade_symbol, shade_byte);
+			draw_line(p3.x, p3.y, p1.x, p1.y, pixel_buffer, shade_buffer, screen_width, screen_height, shade_symbol, shade_byte);
+		}
 	}
 }
 

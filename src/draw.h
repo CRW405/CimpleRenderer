@@ -8,11 +8,18 @@
 
 #include "obj.h"
 
-/** @brief A 2D screen-space point. */
+/** @brief A 2D screen-space point. old implementation. */
 typedef struct {
 	int x;
 	int y;
 } Point2D;
+
+/** @brief A 3D vertex projected into screen space. new implementation*/
+typedef struct {
+	int x;
+	int y;
+	int z;
+} ProjectedVertex;
 
 /**
  * @brief Projects a 3D vertex into screen space using a rotating camera angle.
@@ -24,7 +31,7 @@ typedef struct {
  * @param angle_y Camera rotation angle around the Y-axis in radians.
  * @return The projected 2D point.
  */
-Point2D project(Vertex v, int width, int height, double angle_x, double angle_y, double distance);
+ProjectedVertex project(Vertex v, int width, int height, double angle_x, double angle_y, double distance);
 
 /**
  * @brief Rasterizes a line (Bresenham) into a character buffer.
@@ -35,7 +42,7 @@ Point2D project(Vertex v, int width, int height, double angle_x, double angle_y,
  * @param height Buffer height in cells.
  * @param symbol Character to write along the line.
  */
-void draw_line(int x0, int y0, int x1, int y1, char *pixel_buffer, int width, int height, char symbol);
+void draw_line(int x0, int y0, int x1, int y1, char *pixel_buffer, unsigned char *shade_buffer, int width, int height, char symbol, unsigned char shade);
 
 /**
  * @brief Determines if a face is back-facing relative to the camera.
@@ -46,6 +53,25 @@ void draw_line(int x0, int y0, int x1, int y1, char *pixel_buffer, int width, in
  */
 bool is_backface(Face *face, double angle_x, double angle_y);
 
-void fill_triangle(Point2D p1, Point2D p2, Point2D p3, char *pixel_buffer, int width, int height, char symbol);
+void fill_triangle(ProjectedVertex p1, ProjectedVertex p2, ProjectedVertex p3, char *pixel_buffer, float *depth_buffer, unsigned char *shade_buffer, int width, int height, char symbol, unsigned char shade);
+
+/**
+ * @brief Computes diffuse light intensity for a face against a fixed light direction.
+ * @param face Face to test.
+ * @param angle_x Camera rotation angle around the X-axis in radians.
+ * @param angle_y Camera rotation angle around the Y-axis in radians.
+ * @return Light intensity clamped to [0.0, 1.0].
+ */
+double get_shade_intensity(Face *face, double angle_x, double angle_y);
+
+/**
+ * @brief Buckets a face's shade intensity into a ramp index.
+ * @param face Face to test.
+ * @param angle_x Camera rotation angle around the X-axis in radians.
+ * @param angle_y Camera rotation angle around the Y-axis in radians.
+ * @param ramp_size Number of discrete shade levels available.
+ * @return An index in [0, ramp_size - 1].
+ */
+int get_shade_level(Face *face, double angle_x, double angle_y, int ramp_size);
 
 #endif
