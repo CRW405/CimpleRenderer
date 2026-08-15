@@ -118,4 +118,14 @@ extern double scale;
 /** @brief Field of view factor. */
 extern double fov;
 
+/**
+ * @brief Enables pixel rendering mode (-x/--pixel).
+ *
+ * When set, the renderer packs two vertical samples into each terminal row
+ * using the "▄" half-block glyph (background = top sample, foreground =
+ * bottom sample), doubling effective vertical resolution instead of printing
+ * one plain ASCII character per row.
+ */
+extern bool pixel_mode;
+
 #endif

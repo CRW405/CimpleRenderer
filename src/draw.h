@@ -37,4 +37,15 @@ Point2D project(Vertex v, int width, int height, double angle_x, double angle_y,
  */
 void draw_line(int x0, int y0, int x1, int y1, char *pixel_buffer, int width, int height, char symbol);
 
+/**
+ * @brief Determines if a face is back-facing relative to the camera.
+ * @param face Face to test.
+ * @param angle_x Camera rotation angle around the X-axis in radians.
+ * @param angle_y Camera rotation angle around the Y-axis in radians.
+ * @return true if the face is back-facing, false otherwise.
+ */
+bool is_backface(Face *face, double angle_x, double angle_y);
+
+void fill_triangle(Point2D p1, Point2D p2, Point2D p3, char *pixel_buffer, int width, int height, char symbol);
+
 #endif

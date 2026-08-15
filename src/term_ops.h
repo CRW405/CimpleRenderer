@@ -37,8 +37,14 @@ Termios enable_raw_term(void);
 
 /**
  * @brief Reads current terminal bounds and maps them to render dimensions.
+ *
+ * @p height is the literal number of terminal lines available for the
+ * rendered view (one row is reserved for the status line). Callers that need
+ * a doubled sample count for pixel mode's half-block packing are responsible
+ * for applying that doubling themselves.
+ *
  * @param width Output pointer for render width in cells.
- * @param height Output pointer for render height in cells.
+ * @param height Output pointer for render height in terminal lines.
  * @return true when bounds were read successfully; otherwise false.
  */
 bool get_terminal_bounds(int *width, int *height);

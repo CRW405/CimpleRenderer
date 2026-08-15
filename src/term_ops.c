@@ -41,6 +41,6 @@ bool get_terminal_bounds(int *width, int *height) {
 	}
 
 	*width = ws.ws_col;
-	*height = (ws.ws_row - 1) * 2;
+	*height = ws.ws_row - 1;
 	return true;
 }

@@ -23,6 +23,9 @@ int mouse_y = 0;
 int scroll_delta = 0;
 double scale = 1.0;
 double fov = 1.5;
+bool pixel_mode = false;
+bool no_fill = false;
+bool no_cull = false;
 
 static const double ZOOM_SPEED = 0.5;
 static const double MIN_DISTANCE = 1.0;
@@ -56,8 +59,13 @@ void render_scene(Mesh *scene) {
 	scroll_delta = 0;
 
 	memset(pixel_buffer, ' ', screen_width * screen_height);
+
 	for (size_t i = 0; i < scene->face_count; i++) {
 		Face *face = &scene->faces[i];
+
+		if (is_backface(face, angle_x, angle_y) && !no_cull)
+			continue;
+
 		Point2D p1 = project(*face->vertex1, screen_width, screen_height, angle_x, angle_y, distance);
 		Point2D p2 = project(*face->vertex2, screen_width, screen_height, angle_x, angle_y, distance);
 		Point2D p3 = project(*face->vertex3, screen_width, screen_height, angle_x, angle_y, distance);
@@ -65,6 +73,9 @@ void render_scene(Mesh *scene) {
 		draw_line(p1.x, p1.y, p2.x, p2.y, pixel_buffer, screen_width, screen_height, '#');
 		draw_line(p2.x, p2.y, p3.x, p3.y, pixel_buffer, screen_width, screen_height, '#');
 		draw_line(p3.x, p3.y, p1.x, p1.y, pixel_buffer, screen_width, screen_height, '#');
+
+		if (!no_fill)
+			fill_triangle(p1, p2, p3, pixel_buffer, screen_width, screen_height, '#');
 	}
 }
 
@@ -79,16 +90,19 @@ int main(int argc, char *argv[]) {
 	const char *filepath = "../obj/cube.obj";
 
 	static const struct option long_options[] = {
-		{ "fps",    required_argument, NULL, 'f' },
-		{ "width",  required_argument, NULL, 'w' },
-		{ "height", required_argument, NULL, 'h' },
-		{ "obj",    required_argument, NULL, 'o' },
-		{ "scale",  required_argument, NULL, 's' },
-		{ "fov",    required_argument, NULL, 'v' },
-		{ NULL,     0,                 NULL, 0   }
+		{ "fps",     required_argument, NULL, 'f' },
+		{ "width",   required_argument, NULL, 'w' },
+		{ "height",  required_argument, NULL, 'h' },
+		{ "obj",     required_argument, NULL, 'o' },
+		{ "scale",   required_argument, NULL, 's' },
+		{ "fov",     required_argument, NULL, 'v' },
+		{ "pixel",   no_argument,       NULL, 'x' },
+		{ "no-fill", no_argument,       NULL, 'n' },
+		{ "no-cull", no_argument,       NULL, 'c' },
+		{ NULL,      0,                 NULL, 0   }
 	};
 
-	while ((opt = getopt_long(argc, argv, "w:h:f:o:s:v:", long_options, NULL)) != -1) {
+	while ((opt = getopt_long(argc, argv, "w:h:f:o:s:v:xnc", long_options, NULL)) != -1) {
 		switch (opt) {
 		case 'w':
 			set_width = atoi(optarg) > 1 ? atoi(optarg) : set_width;
@@ -110,6 +124,15 @@ int main(int argc, char *argv[]) {
 		case 'v':
 			fov = atof(optarg) > 0 ? atof(optarg) : fov;
 			break;
+		case 'x':
+			pixel_mode = true;
+			break;
+		case 'n':
+			no_fill = true;
+			break;
+		case 'c':
+			no_cull = true;
+			break;
 		}
 	}
 
@@ -123,6 +146,9 @@ int main(int argc, char *argv[]) {
 		if (set_height > term_height)
 			set_height = term_height;
 	}
+
+	if (pixel_mode)
+		set_height *= 2;
 
 	Mesh *scene = malloc(sizeof(Mesh));
 	if (!scene)
