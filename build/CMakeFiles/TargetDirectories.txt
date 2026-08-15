@@ -1,0 +1,3 @@
+/home/cachy/Documents/CimpleRenderer/build/CMakeFiles/CimpleRenderer.dir
+/home/cachy/Documents/CimpleRenderer/build/CMakeFiles/edit_cache.dir
+/home/cachy/Documents/CimpleRenderer/build/CMakeFiles/rebuild_cache.dir
