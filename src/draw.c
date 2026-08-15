@@ -73,66 +73,82 @@ bool is_backface(Face *face, double angle_x, double angle_y) {
 	return z2 >= 0;
 }
 
+/** @brief Twice the signed area of triangle ABP; sign indicates which side of
+ *  edge AB the point P falls on. Integer math keeps this exact (no float
+ *  rounding), which is what makes shared edges between adjacent triangles
+ *  resolve identically on both sides. */
+static long edge_function(ProjectedVertex a, ProjectedVertex b, int px, int py) {
+	return (long)(b.x - a.x) * (py - a.y) - (long)(b.y - a.y) * (px - a.x);
+}
+
+/**
+ * @brief Classifies a directed edge as "top" or "left" per the standard
+ * rasterization fill rule.
+ *
+ * For any non-degenerate edge, exactly one of its two directions (A->B vs
+ * B->A) is top-left. Biasing that direction's edge test to be inclusive
+ * (and the other exclusive) means a pixel that lands exactly on a shared
+ * edge is claimed by exactly one of the two triangles that share it - never
+ * both (an overlap, which reads as z-fighting where two nearly-coplanar
+ * triangles flicker between each other) and never neither (a 1px gap).
+ */
+static bool is_top_left_edge(int dx, int dy) {
+	return (dy < 0) || (dy == 0 && dx > 0);
+}
+
 void fill_triangle(ProjectedVertex p1, ProjectedVertex p2, ProjectedVertex p3, char *pixel_buffer, float *depth_buffer, unsigned char *shade_buffer, int width, int height, char symbol, unsigned char shade) {
-	// Sort vertices by Y ascending
-	ProjectedVertex tmp;
-	if (p1.y > p2.y) {
-		tmp = p1;
-		p1 = p2;
-		p2 = tmp;
-	}
-	if (p1.y > p3.y) {
-		tmp = p1;
-		p1 = p3;
-		p3 = tmp;
-	}
-	if (p2.y > p3.y) {
-		tmp = p2;
+	long area = edge_function(p1, p2, p3.x, p3.y);
+	if (area == 0)
+		return; // degenerate: zero screen-space area
+
+	if (area < 0) {
+		// Normalize winding so `area` and every edge weight below are positive.
+		ProjectedVertex tmp = p2;
 		p2 = p3;
 		p3 = tmp;
+		area = -area;
 	}
 
-	int total_height = p3.y - p1.y;
-	if (total_height == 0)
-		return;
+	int min_x = p1.x < p2.x ? (p1.x < p3.x ? p1.x : p3.x) : (p2.x < p3.x ? p2.x : p3.x);
+	int max_x = p1.x > p2.x ? (p1.x > p3.x ? p1.x : p3.x) : (p2.x > p3.x ? p2.x : p3.x);
+	int min_y = p1.y < p2.y ? (p1.y < p3.y ? p1.y : p3.y) : (p2.y < p3.y ? p2.y : p3.y);
+	int max_y = p1.y > p2.y ? (p1.y > p3.y ? p1.y : p3.y) : (p2.y > p3.y ? p2.y : p3.y);
 
-	for (int y = 0; y <= total_height; y++) {
-		bool second_half = y > (p2.y - p1.y) || (p2.y == p1.y);
-		int segment_height = second_half ? (p3.y - p2.y) : (p2.y - p1.y);
-		if (segment_height == 0)
-			continue;
+	if (min_x < 0)
+		min_x = 0;
+	if (min_y < 0)
+		min_y = 0;
+	if (max_x > width - 1)
+		max_x = width - 1;
+	if (max_y > height - 1)
+		max_y = height - 1;
 
-		float alpha = (float)y / total_height;
-		float beta = (float)(y - (second_half ? (p2.y - p1.y) : 0)) / segment_height;
+	int bias0 = is_top_left_edge(p3.x - p2.x, p3.y - p2.y) ? 0 : -1;
+	int bias1 = is_top_left_edge(p1.x - p3.x, p1.y - p3.y) ? 0 : -1;
+	int bias2 = is_top_left_edge(p2.x - p1.x, p2.y - p1.y) ? 0 : -1;
 
-		int ax = (int)(p1.x + (p3.x - p1.x) * alpha);
-		int ay = p1.y + y;
-		float az = p1.z + (p3.z - p1.z) * alpha;
+	for (int y = min_y; y <= max_y; y++) {
+		for (int x = min_x; x <= max_x; x++) {
+			long w0 = edge_function(p2, p3, x, y) + bias0;
+			long w1 = edge_function(p3, p1, x, y) + bias1;
+			long w2 = edge_function(p1, p2, x, y) + bias2;
 
-		int bx = second_half ? (int)(p2.x + (p3.x - p2.x) * beta) : (int)(p1.x + (p2.x - p1.x) * beta);
-		float bz = second_half ? (p2.z + (p3.z - p2.z) * beta) : (p1.z + (p2.z - p1.z) * beta);
+			if (w0 < 0 || w1 < 0 || w2 < 0)
+				continue;
 
-		if (ax > bx) {
-			int tx = ax;
-			ax = bx;
-			bx = tx;
-			float tz = az;
-			az = bz;
-			bz = tz;
-		}
+			// Barycentric weights (undo the fill-rule bias first) interpolate
+			// full-precision depth across the triangle, instead of chaining
+			// per-scanline float lerps that lose precision along the way.
+			double b0 = (double)(w0 - bias0) / (double)area;
+			double b1 = (double)(w1 - bias1) / (double)area;
+			double b2 = (double)(w2 - bias2) / (double)area;
+			double current_z = b0 * p1.z + b1 * p2.z + b2 * p3.z;
 
-		int span_width = bx - ax;
-		for (int x = ax; x <= bx; x++) {
-			if (x >= 0 && x < width && ay >= 0 && ay < height) {
-				float t_span = (span_width == 0) ? 0.0f : (float)(x - ax) / span_width;
-				float current_z = az + (bz - az) * t_span;
-
-				int idx = ay * width + x;
-				if (current_z < depth_buffer[idx]) {
-					depth_buffer[idx] = current_z;
-					pixel_buffer[idx] = symbol;
-					shade_buffer[idx] = shade;
-				}
+			int idx = y * width + x;
+			if (current_z < depth_buffer[idx]) {
+				depth_buffer[idx] = (float)current_z;
+				pixel_buffer[idx] = symbol;
+				shade_buffer[idx] = shade;
 			}
 		}
 	}

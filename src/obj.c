@@ -1,3 +1,4 @@
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -101,6 +102,63 @@ static size_t parse_face_line(char *line, Vertex *vertices, Normal *normals,
 	return (size_t)(count - 2);
 }
 
+/**
+ * @brief Computes a face's geometric normal from its vertices (edge cross
+ * product), normalized to unit length.
+ */
+static Normal face_normal(const Face *face) {
+	Vertex e1 = {
+		face->vertex2->x - face->vertex1->x,
+		face->vertex2->y - face->vertex1->y,
+		face->vertex2->z - face->vertex1->z,
+	};
+	Vertex e2 = {
+		face->vertex3->x - face->vertex1->x,
+		face->vertex3->y - face->vertex1->y,
+		face->vertex3->z - face->vertex1->z,
+	};
+
+	Normal n = {
+		e1.y * e2.z - e1.z * e2.y,
+		e1.z * e2.x - e1.x * e2.z,
+		e1.x * e2.y - e1.y * e2.x,
+	};
+
+	double len = sqrt(n.x * n.x + n.y * n.y + n.z * n.z);
+	if (len > 1e-12) {
+		n.x /= len;
+		n.y /= len;
+		n.z /= len;
+	}
+
+	return n;
+}
+
+/**
+ * @brief Fills in a per-face normal, computed dynamically from each face's
+ * own vertices, for meshes whose OBJ file had no "vn" lines at all.
+ *
+ * Without this, every face->normal stays NULL, which disables both
+ * backface culling and diffuse shading (both silently fall back to
+ * "always visible, fully lit").
+ */
+static void compute_dynamic_normals(Mesh *mesh) {
+	if (mesh->normal_count > 0 || mesh->face_count == 0)
+		return;
+
+	Normal *normals = realloc(mesh->normals, mesh->face_count * sizeof(Normal));
+	if (!normals)
+		return;
+
+	for (size_t i = 0; i < mesh->face_count; i++) {
+		normals[i] = face_normal(&mesh->faces[i]);
+		mesh->faces[i].normal = &normals[i];
+	}
+
+	mesh->normals = normals;
+	mesh->normal_count = mesh->face_count;
+}
+
 int parse_obj(const char *path, Mesh *mesh) {
 	FILE *file = fopen(path, "r");
 	if (!file)
@@ -161,6 +219,8 @@ int parse_obj(const char *path, Mesh *mesh) {
 	mesh->normal_count = normal_count;
 	mesh->faces = faces;
 	mesh->face_count = face_count;
+
+	compute_dynamic_normals(mesh);
 
 	fclose(file);
 	return 0;

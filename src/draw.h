@@ -18,7 +18,7 @@ typedef struct {
 typedef struct {
 	int x;
 	int y;
-	int z;
+	double z; /**< Camera-space depth; kept sub-integer precision for z-buffering. */
 } ProjectedVertex;
 
 /**
