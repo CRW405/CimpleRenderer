@@ -55,3 +55,14 @@ triangulated meshes.
 
 `obj/` includes a few example meshes to try with `-o`: `cube.obj`,
 `sumn.obj`, and the Utah teapot (`UTAH_BLEND.obj`).
+
+## Notes
+
+### TODO
+
+- free fly camera
+- mouse panning
+- mouse rotation
+- ASCII shading
+- pixel shading
+- glb support
